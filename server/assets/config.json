@@ -1,0 +1,5 @@
+{
+    "port": 3000,
+    "badWordsListUrl": "https://www.cs.cmu.edu/~biglou/resources/bad-words.txt",
+    "mock3dPartySmsServerUrl": "http://localhost:5001/send/sms"
+}

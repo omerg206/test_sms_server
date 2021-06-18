@@ -1,0 +1,4 @@
+{
+    "port": 5001,
+    "sms_server_url": "http://localhost:3000"
+}

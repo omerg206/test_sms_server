@@ -1,0 +1,27 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "sms server",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start:cluster": "node ./node_modules/pm2/bin/pm2 start",
+    "start:single": "node index.js"
+  },
+  "keywords": [
+    "sms"
+  ],
+  "author": "omer golan",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "axios-rate-limit": "^1.3.0",
+    "body-parser": "^1.19.0",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "express": "^4.17.1",
+    "helmet": "^4.6.0",
+    "pm2": "^5.1.0",
+    "uuid": "^8.3.2"
+  }
+}
