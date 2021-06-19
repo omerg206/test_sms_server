@@ -9,12 +9,13 @@ const rateLimit = require('axios-rate-limit');
 const axiosWithLimit = rateLimit(axios.create(), { maxRPS: 10 })
 const app = express();
 const { v4 } = require('uuid');
-
+const { connectToMongoDb, addMsgToDb, updateMsgDb } = require('./db/mongodb.js')
 
 app.use(express.json());
 app.use(helmet());
 app.use(cors());
 app.use(compression());
+
 
 
 
@@ -38,7 +39,7 @@ onStartUpGetBadWordsListAsSet = async () => {
 }
 
 const badWordsFilterMiddleware = (req, res, next) => {
-  const { message } = req.body;
+  const { message, sender, recipient } = req.body;
 
   if (!message) {
     res.status(400).send('message is empty')
@@ -47,6 +48,8 @@ const badWordsFilterMiddleware = (req, res, next) => {
   const isContainsBadWord = messageAsWords.some((word) => BAD_WORDS_SET.has(word.toLowerCase()))
 
   if (isContainsBadWord) {
+    const transaction_id = v4();
+    addMsgToDb({ recipient, message, sender, transaction_id, status: 'FAILED' });
     res.status(400).send('message contains a forbidden word and will not be sent')
   } else {
     next()
@@ -58,10 +61,10 @@ const sendSmsTo3PartyMock = ({ recipient, message, sender, transaction_id }) => 
   //i dont think the limit will apply in cluster mode. i would probably use redis store or another 
   // store with the limit package 
 
-  return axiosWithLimit.post(mock3dPartySmsServerUrl, { recipient, message, sender }).then((res) => {
-
-    console.log(`message ${transaction_id} was successfully delivered`);
-  })
+  return axiosWithLimit.post(mock3dPartySmsServerUrl, { recipient, message, sender })
+    .then((res) => {
+      console.log(`message ${transaction_id} was successfully delivered`);
+    })
     .catch((e) => {
       console.error(`an error occurred sending sms to third party service ${e}`);
       return e;
@@ -71,6 +74,7 @@ const sendSmsTo3PartyMock = ({ recipient, message, sender, transaction_id }) => 
 }
 
 const main = async () => {
+  await connectToMongoDb();
   await onStartUpGetBadWordsListAsSet();//didnt have time for redis, or elasticsearch or mongodb
   app.post('/sms/send', badWordsFilterMiddleware, async (req, res) => {
     try {
@@ -84,12 +88,16 @@ const main = async () => {
       }
 
       const transaction_id = v4();
+      await addMsgToDb({ recipient, message, sender, transaction_id, status: 'ACCEPTED' });
 
       //wasnt sure if i was meant to wait for 3dparty response or not.
-      await sendSmsTo3PartyMock({ transaction_id, recipient, message, sender })
-      return res.status(200).json({ transaction_id })
+      sendSmsTo3PartyMock({ transaction_id, recipient, message, sender })
+        .then(() => updateMsgDb(transaction_id, { status: 'SENT' }));
+
+      return res.status(200).json({ transaction_id });
     } catch (e) {
-      console.error(`an error occurred while receiving sms ${JSON.stringify(e)}`)
+      console.error(`an error occurred while receiving sms ${JSON.stringify(e)}`);
+      updateMsgDb(transaction_id, { status: 'FAILED' })
       return res.status(400).send('an error occurred while receiving sms')
     }
   })
